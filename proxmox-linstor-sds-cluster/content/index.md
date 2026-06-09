@@ -11,6 +11,11 @@ tags:
   - cluster
   - homelab
   - blog
+  - linux
+  - ceph
+  - zfs
+  - high-availability
+  - storage
 category: homelab
 ---
 
