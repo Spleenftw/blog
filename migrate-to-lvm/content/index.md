@@ -12,6 +12,7 @@ tags:
   - blog
   - homelab
   - storage
+description: "Fixing a partitioning mistake I made years ago: migrating a live Linux system to LVM with no reinstall and no data loss — just mild stress. Resize + rename too."
 category: system
 ---
 
