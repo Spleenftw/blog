@@ -13,6 +13,9 @@ tags:
   - ssh
   - jq
   - blog
+  - security
+  - suricata
+  - nginx
 category: security
 ---
 
