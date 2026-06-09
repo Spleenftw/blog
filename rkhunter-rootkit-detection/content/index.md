@@ -10,6 +10,9 @@ tags:
   - debian
   - blog
   - homelab
+  - security
+  - hardening
+  - malware
 category: system
 ---
 
