@@ -11,6 +11,7 @@ tags:
   - debian
   - blog
   - homelab
+  - storage
 category: system
 ---
 
