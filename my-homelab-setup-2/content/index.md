@@ -309,6 +309,7 @@ The mount-option gotcha that'll cost you an evening : <strong><code>_netdev</cod
 <p>Semaphore pulls its <strong>Ansible inventory straight out of Gitea</strong>, and I keep <strong>two inventories</strong> : <code>dev</code> and <code>prod</code>. Same playbooks, different targets, so I can break something on dev without explaining to myself later why prod is on fire. Semaphore authenticates to Gitea and to every host with its <strong>own dedicated SSH key</strong>, scoped for exactly that, which is also why the firewall has those surgical management exceptions I mentioned in #1.</p>
 <p>In WIMH #1 I showed the whole playbook tree (the <code>apt</code> / <code>security</code> / <code>utilities</code> / <code>ntp</code> / <code>ssh</code> categories). I won't repeat it. Instead, here's a few of the workhorses that help me to run patch and configure some services :</p>
 <pre><code class="language-tabs">[apt update]
+---
 - name: Check for upgradable packages
   hosts: "{{ target_hosts }}"
 
@@ -325,6 +326,7 @@ The mount-option gotcha that'll cost you an evening : <strong><code>_netdev</cod
     - name: Display upgradable packages
       debug:
         var: upgradable_packages.stdout_lines
+
 
 [ssh config]
 ---
