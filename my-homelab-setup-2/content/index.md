@@ -9,9 +9,13 @@ tags:
   - linux
   - docker
   - debian
-  - jq
   - blog
   - series-wimh
+  - tailscale
+  - proxmox
+  - ansible
+  - monitoring
+  - self-hosting
 category: homelab
 ---
 
