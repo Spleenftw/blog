@@ -13,8 +13,9 @@ tags:
   - network
   - blog
   - homelab
-  - internet
   - isp
+  - unbound
+  - privacy
 category: network
 ---
 
