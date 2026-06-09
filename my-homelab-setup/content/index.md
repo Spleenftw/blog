@@ -11,6 +11,11 @@ tags:
   - debian
   - blog
   - series-wimh
+  - proxmox
+  - ceph
+  - vlan
+  - firewall
+  - self-hosting
 category: homelab
 ---
 
