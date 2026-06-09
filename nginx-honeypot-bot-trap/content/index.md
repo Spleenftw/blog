@@ -16,6 +16,7 @@ tags:
   - security
   - suricata
   - nginx
+description: "Spreading honey on the web: I build an SSH honeypot with Cowrie and T-Pot, then sift through the bot carnage with jq. Yes, this is a normal hobby."
 category: security
 ---
 
