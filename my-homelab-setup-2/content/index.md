@@ -16,6 +16,7 @@ tags:
   - ansible
   - monitoring
   - self-hosting
+description: "The homelab deep dive: I corner you by the rack and don't let you leave until you've heard about all 11 services — Tailscale, Proxmox HA, PBS, Wazuh, Ansible."
 category: homelab
 ---
 
