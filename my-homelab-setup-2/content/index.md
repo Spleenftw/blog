@@ -304,7 +304,7 @@ The mount-option gotcha that'll cost you an evening : <strong><code>_netdev</cod
 </blockquote>
 <p>Did I benchmark before and after ? No, of course I didn't, that would have implied I had a real reason to migrate. It <em>feels</em> snappier, the stale-handle weirdness I used to get on SMB is gone, and PBS is happy. For a change made on vibes, that's a clean result.
 <br></p>
-<h2>The semi GitOps spine : Gitea + Semaphore + Ansible</h2>
+<h2>The semi GitOps spine</h2>
 <p>This is the brain that keeps the fleet consistent. <strong>Gitea</strong> is the source of truth, <strong>Semaphore</strong> is the hands.</p>
 <p>Semaphore pulls its <strong>Ansible inventory straight out of Gitea</strong>, and I keep <strong>two inventories</strong> : <code>dev</code> and <code>prod</code>. Same playbooks, different targets, so I can break something on dev without explaining to myself later why prod is on fire. Semaphore authenticates to Gitea and to every host with its <strong>own dedicated SSH key</strong>, scoped for exactly that, which is also why the firewall has those surgical management exceptions I mentioned in #1.</p>
 <p>In WIMH #1 I showed the whole playbook tree (the <code>apt</code> / <code>security</code> / <code>utilities</code> / <code>ntp</code> / <code>ssh</code> categories). I won't repeat it. Instead, here's a few of the workhorses that help me to run patch and configure some services :</p>
