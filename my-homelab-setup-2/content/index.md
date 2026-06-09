@@ -16,7 +16,6 @@ tags:
   - ansible
   - monitoring
   - self-hosting
-description: "Retry tag update on WIMH #2 to test whether write auth (401) is resolved"
 category: homelab
 ---
 
