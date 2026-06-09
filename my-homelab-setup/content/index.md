@@ -16,6 +16,7 @@ tags:
   - vlan
   - firewall
   - self-hosting
+description: "Welcome to the homegarden: a tour of my 3-node Proxmox homelab — OpenFabric mesh, VLANs, zone firewalling, Ceph, and a 3-2-1 backup rule I actually follow."
 category: homelab
 ---
 
