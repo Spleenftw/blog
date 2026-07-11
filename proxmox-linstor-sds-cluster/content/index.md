@@ -16,7 +16,7 @@ tags:
   - zfs
   - high-availability
   - storage
-description: "Cooking up a 3-node Proxmox cluster with shared storage: I weighed Ceph, ZFS and iSCSI, picked LINSTOR, and ran it over a 10G ring. Benchmarks included."
+description: "Turning one Proxmox node into a 3-node cluster with shared storage: Ceph vs ZFS vs iSCSI, why LINSTOR won, all over a switchless 10G ring. Benchmarks go brrr."
 category: homelab
 ---
 

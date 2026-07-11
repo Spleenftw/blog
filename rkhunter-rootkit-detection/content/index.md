@@ -13,7 +13,7 @@ tags:
   - security
   - hardening
   - malware
-description: "Can you really trust your binaries? Rootkit hunting on Linux with rkhunter — how it works, I write a toy rootkit to test it, then bypass it anyway."
+description: "You can't prove you've never been hacked, so I go rootkit hunting with rkhunter: how it works, a toy rootkit to test it, then a clean bypass anyway."
 category: system
 ---
 

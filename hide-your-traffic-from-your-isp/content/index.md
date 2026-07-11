@@ -16,7 +16,7 @@ tags:
   - isp
   - unbound
   - privacy
-description: "How to (partially) evade your ISP: encrypt your DNS with DoH and DoT, and learn where a VPN actually helps — and where it's just security theater."
+description: "How to (partially) evade your ISP: encrypt your DNS with DoH and DoT, and learn where a VPN actually helps and where it's just security theater."
 category: network
 ---
 
