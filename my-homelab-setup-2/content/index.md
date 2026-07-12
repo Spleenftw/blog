@@ -730,5 +730,4 @@ root@ntp01:~# ntpq -p
 <p>None of it is finished. The namespaces aren't done, the KVMs aren't bought, the alerting isn't wired, and at least one design decision in here was load-bearing <em>vibes</em>. That's still the whole point : a production-ready homelab isn't a finished datacenter, it's a thing you keep poking at because poking at it is the hobby.</p>
 <p>If you made it all the way here : thanks, and, again, get a hobby (he says, having written part two of a small novel about his own).</p>
 <p>Thanks for reading me,</p>
-<p>spleenftw
-<img src="../img/grafana-cpu-png.png" alt="Image description" /></p>
+<p>spleenftw</p>
