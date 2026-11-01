@@ -20,96 +20,33 @@ description: "How I deployed two HAProxy and Anubis edges with Cloudflare load b
 category: "network"
 ---
 
-<h2>The homelab has two front doors now</h2>
-<p>
-In <a href="https://blog.interlope.xyz/my-homelab-setup-2">WIMH #2</a>, I described the VPS entry into the
-lab: public traffic lands outside the house, then crosses the overlay to reach my services. The house keeps
-its ports closed. That part stays.
-</p>
-<p>
-What changed is the public entrance. The older setup mixed application hosting with Nginx and Anubis on the
-same VPS machines. It worked, but moving the entrance onto a dedicated pair of machines gives me somewhere
-else to send visitors when one edge fails.
-</p>
-<p>
-So this is the writeup of that migration: two OVH VPS instances, HAProxy on both, an Anubis instance per
-service on each, Cloudflare Load Balancing in front, and Semaphore deploying the configuration from Git. The media workload needed its own treatment, because a video client has very little interest in
-solving a JavaScript challenge.
-</p>
-<p>
-Grab a coffee. There are health checks inside health checks.
-</p>
-<blockquote><p>
-Node names in this article are aliases. Public example addresses come from documentation ranges; private
-addresses, internal DNS names and infrastructure identifiers are omitted or replaced. Screenshot labels have
-been anonymized, with graph legends redrawn where needed; plotted values are unchanged. Configuration
-fragments are shortened examples, not a dump of my access policy. No credentials, real client addresses, service hostnames or live service-to-host inventory are included. Application labels in screenshots are generic.
-</p></blockquote>
 
-<h2>What actually runs where</h2>
-<p>
-I'll call the public entry machines <code>edge-a</code> and <code>edge-b</code>. They live in different OVH
-locations. The existing application VPS machines become <code>origin-a</code> and <code>origin-b</code>, while
-the subnet router at home becomes <code>home-router</code>. Nginx Proxy Manager is still the HTTPS gateway to
-the local applications.
-</p>
-<p>
-Each edge runs HAProxy and an Anubis instance per configured application. Each Anubis has its own policy and target. The applications
-themselves remain on their existing hosts.
-</p>
-<p>
-<img src="../img/architecture.png" alt="Six web services reach either edge through the Cloudflare proxy.
-Media clients connect directly to either edge after DNS selection. Both edges use private overlay paths to
-VPS origins or the home reverse proxy." />
-</p>
-<p>The following are illustrative routing patterns, not a catalogue of the live applications or their host assignments.</p>
-<table>
-<thead><tr><th>Example workload</th><th>Origin path</th><th>Public entrance</th></tr></thead>
-<tbody>
-<tr><td>Browser application</td><td>Private application host over the overlay</td><td>Cloudflare proxy</td></tr>
-<tr><td>Application with native API clients</td><td>Private HTTPS gateway</td><td>Cloudflare proxy with application-specific challenge rules</td></tr>
-<tr><td>Media workload</td><td>Private HTTPS gateway</td><td>DNS-only load balancing, direct HTTPS</td></tr>
-</tbody></table>
-<p>
-For a service at home, the request travels through HAProxy, its selected Anubis, the Tailscale overlay, the
-home subnet router, the firewall, and NPM before reaching the application. Between the router and NPM, the
-firewall permits HTTPS to that gateway. The edges don't get a general invitation into the LAN.
-</p>
-<p>
-Also, a change from that older WIMH post: this setup uses <strong>Headscale</strong> as its control plane. The
-clients are still Tailscale clients. The article describing the official Tailscale control plane records an
-earlier state of the lab.
-</p>
+<h2>Another perfectly reasonable weekend project</h2>
 
-<h3>The complete flow map</h3>
-<p>This diagram separates visitor traffic from deployment, control and monitoring. Application groups are illustrative; no real service catalogue, hostnames or private addresses are included. Solid arrows show the main flow within each section, while dashed arrows identify secondary paths, checks or control operations.</p>
+<p>The public entrance to the homelab has changed again. In <a href="https://blog.interlope.xyz/my-homelab-setup-2">WIMH #2</a>, I described the VPS that forwards traffic into the lab over the overlay, without opening ports on the home connection. That arrangement is still there, but the entrance was mixed in with the application machines: Nginx, Anubis and the services they exposed shared those VPS hosts. This time I moved the public entry onto two dedicated machines, in different OVH locations, and put Cloudflare Load Balancing in front of them. Which sounds like a fairly contained change until you start following a request all the way through it.</p>
+
+<p>There is now HAProxy on each edge, an Anubis instance per application, private routes back to the origins, a fallback through the other edge, certificates to renew, and Semaphore deploying the whole thing from Git. The applications stayed where they were. The interesting work was getting the new entrances to reach them, deciding what should happen when something breaks, and then actually breaking the appropriate thing to check. Also, the media clients needed their own treatment. Asking a video player to solve a browser challenge was never going to be a good viewing experience.</p>
+
+<p>Same homelab, more plumbing. I'll call the entrances <code>edge-a</code> and <code>edge-b</code>, the application VPS machines <code>origin-a</code> and <code>origin-b</code>, and the home subnet router <code>home-router</code>. These are aliases. The addresses and hostnames in the examples are placeholders, the screenshot legends have been replaced, and I'm keeping the actual service catalogue and access policy private. You can follow the routing without getting a map of everything currently online.</p>
+
+<p>Here is the short version before we get into the deployment. Web requests go through Cloudflare to either edge, then HAProxy and Anubis, and finally to the application over the private network. For services at home, the last part crosses the subnet router and firewall to Nginx Proxy Manager. NPM still does the forwarding inside the lab; the new edges haven't replaced it.</p>
+
+<p><img src="../img/architecture.png" alt="Anonymized overview of two public edges, private application origins and direct media access" /></p>
+
+<p>And here is the less short version. The diagram also shows the deployment and monitoring paths, which aren't extra stops for a visitor's request. Headscale manages the Tailscale clients and their access policy; HTTP traffic doesn't pass through Headscale itself. That is another change since the older WIMH post, which described the official Tailscale control plane. The red panel is a separate explanation of what the redundancy covers and where it stops.</p>
+
 <figure>
 <a href="../img/infrastructure-overview.png"><img src="../img/infrastructure-overview.png" alt="Detailed anonymized architecture: Cloudflare proxy and DNS-only access, two HAProxy and Anubis edges, private service failover, Tailscale origins, Semaphore deployment, Headscale policy, certificates and Prometheus monitoring" loading="lazy" /></a>
 <figcaption>Open the image at full size to follow the paths. The separate red panel explains failure handling and redundancy limits; it is not an infrastructure component or a traffic path. Cloudflare checks the public entrance; each HAProxy checks its application paths.</figcaption>
 </figure>
-<p>The <a href="../files/infrastructure-mermaid.txt">Mermaid source</a> describes this generic architecture. It is maintained documentation, not a production configuration export.</p>
 
-<h3>Getting the private path ready first</h3>
-<p>
-The work started behind the public entrance. The edges needed a usable route to each origin before they could
-proxy anything. Joining Headscale alone doesn't make a loopback-only application reachable, and a working
-local curl doesn't prove that another node has permission to reach it.
-</p>
-<p>
-One web application was a good example. Its existing port was bound to loopback for the old local reverse proxy. A second
-binding on its overlay address let the new edges reach it while the old path stayed available during
-migration. The other applications also needed their actual listening addresses checked. There was no reason to
-open their application ports to the public Internet.
-</p>
-<p>
-For the home services, the subnet router advertised the route to NPM. The edge clients accepted private routes
-without using an exit node. Their ordinary Internet egress stayed their own, which also matters later for
-Cloudflare API access.
-</p>
-<p>
-The enrollment command looked like this, with the control hostname and node name replaced:
-</p>
+<p>The <a href="../files/infrastructure-mermaid.txt">Mermaid source</a> is available if you want to follow the connections at full size. The application groups in it are generic.</p>
 
+<h2>First, make the applications reachable</h2>
+
+<p>Before putting a second entrance anywhere near the public DNS, I had to check the origins. One application was listening only on loopback, which made perfect sense while its reverse proxy ran on the same machine. From a new edge, that listener might as well not exist. I added a binding on its overlay address while keeping loopback for the old entrance, then checked the other applications' listeners too. This let the migration happen alongside the working setup rather than replacing its access path before the new one had been tested.</p>
+
+<p>At home, the subnet router already provided the route to NPM. The firewall between that router and the gateway permits HTTPS to NPM, so the edges use that specific path rather than getting access to the entire LAN. They join Headscale with <code>tag:edge</code>, accept the approved private routes, and keep their ordinary Internet egress. They don't select an exit node. That last detail becomes relevant when Certbot starts talking to Cloudflare from the VPS's own public address.</p>
 
 ```bash
 sudo tailscale up \
@@ -119,38 +56,23 @@ sudo tailscale up \
   --accept-routes
 ```
 
+<p>The second edge uses its own hostname, followed by registration and approval on the control plane. Then come the checks: the right tag, the right route, and an actual response from the origin. Being present in the mesh only gets us part of the way. During preparation, a request between the application VPS machines timed out even though both nodes were online. Their role didn't have the destination access intended for the new edges. Opening that access just to make an arbitrary test machine happy would have changed the policy for the wrong reason; the useful test was from a node carrying <code>tag:edge</code>.</p>
 
-<p>
-The other edge uses its own hostname. Registration and approval happen through Headscale; an enrollment
-command is not a substitute for checking the resulting tags, approved routes and connectivity.
-</p>
-<p>
-I kept <code>tag:edge</code> as its own role. The access rules describe the application destinations and ports
-the edges need, plus their private peer gateways. Giving these machines a broad management tag would have made
-the initial tests easier and the trust boundary much worse.
-</p>
-<p>
-One early timeout between the application VPS machines was consistent with that policy. The machines were
-online, but their role didn't grant the origin access intended for the edges. The useful test was from a
-correctly tagged edge, not from whichever machine happened to have a shell open.
-</p>
+<p>For an HTTPS origin behind NPM, I tested the application hostname against the private address directly. This keeps the Host header and TLS name correct while avoiding public DNS resolution. The certificate still has to validate:</p>
 
-<h2>Two different kinds of failover</h2>
-<p>
-This is the part that took the most explaining during the build. Cloudflare and HAProxy make different
-decisions.
-</p>
-<p>
-Cloudflare selects a public edge. Both edges are active, using equal endpoint weights and Random steering
-inside one pool. With session affinity, this does not mean every other HTTP request lands on the other VPS. A
-browser session can stay on one edge, and a long connection can account for much more traffic than a short
-visit.
-</p>
-<p>
-HAProxy then selects a path for the requested service. It prefers the local Anubis. If that local path is
-unhealthy, it uses a private gateway on the other edge.
-</p>
+```bash
+curl --noproxy '*' --connect-timeout 5 --max-time 15 \
+  --resolve app.example.net:443:NPM_PRIVATE_IP \
+  -I https://app.example.net/
+```
 
+<p>That private resolution is carried into the deployment too. Anubis targets the application hostname with a private address mapping, and HAProxy's origin probe uses the proper SNI and verifies the origin certificate. Once this part works from each edge, there is something worth deploying in front of it. Until then, a beautiful proxy configuration would just produce a more elaborate error page.</p>
+
+<h2>Two edges, two different decisions</h2>
+
+<p>The part that needed untangling was the word "failover", because there are two separate decisions in this setup. Cloudflare chooses the public entrance. Both edges are active, with equal weights and Random steering inside the pool; session affinity then keeps a browser on its selected edge while that endpoint stays healthy. This won't alternate every request between the machines. One session can sit on one edge and transfer much more data than several visits on the other. I'll come back to that when we reach the graphs.</p>
+
+<p>After the request lands, HAProxy chooses a path for that particular application. Normally it uses the local Anubis. If that path becomes unhealthy, it can use a private gateway on the other edge, which forwards to the peer's local Anubis and then to the origin. So a visitor can still enter through edge-a while one application's request crosses to edge-b. The other healthy applications on edge-a keep their local paths. We aren't moving the entire entrance because one container stopped.</p>
 
 ```text
 Normal:
@@ -164,32 +86,9 @@ edge-a unavailable:
 visitor → Cloudflare → edge-b → local Anubis → origin
 ```
 
+<p>Those private gateways bind to the overlay addresses only. Headscale restricts which nodes may reach them, and HAProxy checks the source edge and the expected Host as well. Each gateway has one destination: its own local Anubis. It cannot choose the peer again, so there is no opportunity for the two edges to pass the same request back and forth. The public access restrictions run before HAProxy chooses either path.</p>
 
-<p>
-The second path is per service. Losing one application's Anubis on edge-a does not send the other applications across
-the mesh too. Their healthy local paths keep working.
-</p>
-<p>
-The private gateways bind only to the edges' overlay addresses. Headscale controls access, and HAProxy
-additionally checks the source edge and the expected Host. Crucially, a private gateway can reach only its own
-local Anubis. It cannot send the request back to the peer. No proxy ping-pong.
-</p>
-<p>
-HAProxy inserts a service-specific routing cookie to keep the chosen path consistent through challenges and
-subsequent requests. Cloudflare's affinity cookie operates one level earlier, choosing the public edge. They
-solve different problems.
-</p>
-<p>
-None of this moves an already-open WebSocket or video connection between machines. A client has to reconnect.
-There is also no extra HAProxy policy here to replay an application POST after receiving a response.
-</p>
-
-<h3>What the backend actually selects</h3>
-<p>
-Here is a shortened version of the generated backend on edge-a for an example application. The address tokens stand for
-private overlay addresses and must be replaced before using this as configuration:
-</p>
-
+<p>Here is the backend on edge-a for an example application. The server called <code>anubis</code> actually points at the local private gateway, because that's where the complete local path gets checked. The second server is the peer, marked <code>backup</code>. Replace the address tokens before trying to use this anywhere:</p>
 
 ```haproxy
 backend be_app
@@ -202,130 +101,50 @@ backend be_app
     server peer EDGE_B_MESH_IP:18923 source EDGE_A_MESH_IP cookie edge-b backup check inter 5s fall 2 rise 2 init-state fully-down
 ```
 
+<p>There are cookies at both layers. Cloudflare's affinity cookie chooses the public edge, while <code>EDGE_ROUTE_app</code> keeps an application's chosen local or peer path consistent through its challenge and subsequent requests. The cookie values identify the same edge on both machines. A session that moved to the peer can stay there after the local path recovers; a fresh session prefers the healthy local path. That explains why reloading one existing browser session after recovery doesn't tell you where all new traffic is going.</p>
 
-<p>
-The server named <code>anubis</code> here points to the local private gateway, which checks the complete local
-path. The <code>peer</code> is a backup server. On edge-b, the generated configuration reverses the addresses
-but keeps cookie values tied to the actual edge aliases.
-</p>
-<p>
-<code>fall 2</code> and <code>rise 2</code> avoid changing state after one isolated probe result. They don't
-promise a ten-second recovery for the whole chain: these gateway checks depend on the separate Anubis and
-origin checks, their own intervals, and connection timeouts. The peer cannot be selected until HAProxy
-considers it healthy.
-</p>
-<p>
-A session that used the peer can remain there after the local route recovers because its routing cookie still
-selects that path. A new session prefers the healthy local server. This is why looking at one browser
-immediately after recovery isn't a reliable way to infer where all new traffic goes.
-</p>
+<p>The checks also have their own timing. The gateway checks above run every five seconds with two failures or successes needed for a state change, but they depend on the separate Anubis and origin checks, which have their own intervals and timeouts. Multiplying five by two doesn't give us a reliable total failover time. Existing connections are a separate matter again: a WebSocket or video stream doesn't move between processes. The client reconnects, and this HAProxy configuration adds no policy to replay a POST after receiving an application response.</p>
 
-<h2>A green check has to mean something specific</h2>
-<p>
-A TCP port can be open while the application behind it is dead. Anubis can also return a perfectly good
-challenge page while its target is unavailable. So checking for a generic HTTP 200 would tell a rather
-optimistic story.
-</p>
-<p>
-The configuration checks Anubis and the origin separately. A local service gateway is ready only when both are
-healthy. With inter-edge redundancy enabled, the public readiness route accepts either a healthy local path or
-a healthy peer path.
-</p>
-<table>
-<thead><tr><th>Endpoint</th><th>Question it answers</th></tr></thead>
-<tbody>
-<tr><td><code>/_edge/entry-health</code></td><td>Can this edge receive HTTPS and respond through HAProxy?</td></tr>
-<tr><td><code>/_edge/health</code> on an application Host</td><td>Does this service have a usable local or peer path?</td></tr>
-<tr><td>Private gateway health</td><td>Are this edge's own Anubis and origin healthy?</td></tr>
-<tr><td><code>/_edge/metrics</code></td><td>What states and traffic does HAProxy report?</td></tr>
-</tbody></table>
-<p>
-The distinction matters because I ended up using one shared Cloudflare pool with two endpoints. Every public
-load balancer reuses it. This kept the configuration within the endpoint allocation shown by my subscription,
-rather than duplicating a two-endpoint pool for each service.
-</p>
-<p>
-A shared pool also shares its health verdict. Using one application as its monitor would make its failure
-influence all the other domains. Requiring every application to pass would let one failed common origin take
-both edges out of rotation. Neither describes the health of the entrance very well.
-</p>
-<p>
-The common monitor therefore checks HTTPS ingress only. HAProxy returns <code>edge-ready</code> on a dedicated
-Host and path, after checking the network source and monitor token. The monitor expects a valid certificate,
-HTTP 200 and that exact body.
-</p>
-<p>
-It deliberately stays green when a shared application is down. The application checks and Prometheus show that
-failure separately. <a href="https://developers.cloudflare.com/load-balancing/monitors/">Cloudflare's monitor
-documentation</a> describes how those probes determine endpoint health.
-</p>
-<p>
-There is a limit to this choice: an edge can keep answering the ingress probe while one service has lost both
-its local route and its route through the peer. If the other edge can still serve that service directly, the
-common monitor will not steer just that domain away from the broken edge. Separate service pools could make
-that decision. This setup relies on the private per-service fallback for that layer.
-</p>
+<h2>Getting a useful green light out of Cloudflare</h2>
+
+<p>For Cloudflare, I settled on one shared pool containing the two endpoints, reused by the application load balancers. This stayed within the endpoint allocation shown by my subscription instead of repeating a two-endpoint pool for each application. The tradeoff is that all those load balancers share the pool's health decision. A monitor aimed at one application would let that application's failure affect the other domains too. A monitor requiring every application to be healthy could remove both edges because one common origin had failed. Neither outcome would fix the application.</p>
 
 <figure>
 <img src="../img/pool.png" alt="Cloudflare pool with two healthy anonymized endpoints, each weighted 1, and Random steering" loading="lazy" />
 <figcaption>The shared pool after deployment: both endpoints healthy and enabled, with equal weights. Names and IP addresses have been replaced.</figcaption>
 </figure>
 
-<h3>The shared monitor, field by field</h3>
-<p>
-The monitor is HTTPS on port 443, using GET on <code>/_edge/entry-health</code>. Its configured interval is 60
-seconds, timeout five seconds, with two retries. The expected result is HTTP 200 and <code>edge-ready</code>.
-The option to skip certificate verification is unchecked.
-</p>
-<p>
-These are monitor settings, not a measurement of how long a visitor waits during failure. Probe scheduling,
-health decisions and existing connections all affect the result.
-</p>
+<p>The common monitor therefore checks the public HTTPS entrance. It requests <code>/_edge/entry-health</code> on a dedicated Host and expects HTTP 200 with <code>edge-ready</code>. HAProxy produces that response after checking the Host, the actual network source and the monitor token. The settings are HTTPS on port 443, GET, a 60-second interval, five-second timeout and two retries. Certificate verification stays enabled. Meanwhile, HAProxy checks each application's Anubis and origin separately: the private gateway is ready only when both local components are healthy, and the public per-service <code>/_edge/health</code> route can accept a healthy local or peer path.</p>
+
 <figure>
 <img src="../img/monitor-settings.png" alt="Cloudflare HTTPS monitor configured with a 60-second interval, five-second timeout, two retries, status 200 and body edge-ready" loading="lazy" />
 <figcaption>The actual common monitor settings. Its request headers are configured separately; no token value is included in this screenshot.</figcaption>
 </figure>
 
-<h2>Anubis, without breaking the clients I actually use</h2>
-<p>
-<a href="https://github.com/TecharoHQ/anubis">Anubis</a> adds a browser proof-of-work challenge in front of an
-application. It does not replace that application's login. In this deployment, its listeners and metrics stay
-on loopback; HAProxy is the public HTTP entrance.
-</p>
-<p>
-The policies follow the application. Browser-oriented services receive a challenge. The notification service's API and stream
-routes bypass it so notifications and clients can work. The request application's API does too. The media service challenges its
-root and web interface, while native API, media and socket routes continue to the application's
-authentication.
-</p>
-<p>
-An Anubis <code>ALLOW</code> rule means "skip this challenge". It does not mean "give this person access to my
-libraries".
-</p>
-<p>
-That distinction deserved a real check on the media service. Anonymous requests to the tested private routes, including
-users, sessions, libraries, server configuration and API keys, returned 401 on both edges. The public
-information route remained public, and the public user-list route returned an empty list. HAProxy blocked
-<code>/health</code> and <code>/metrics</code> with 404, while the protected edge readiness route returned 403
-without its secret.
-</p>
-<p>
-Those results cover the routes tested, not every plugin or account permission in the media service. They do show why
-"block the whole API" would have been the wrong fix: the clients need it.
-</p>
-<p>
-The URL itself also needs attention before path-based restrictions. For the services with strict path rules,
-HAProxy normalizes supported encodings and path components, and rejects ambiguous forms before applying
-restrictions. Otherwise, protecting <code>/admin</code> while overlooking an equivalent encoded path is an
-expensive way to learn about URL parsing.
-</p>
+<p>This means the common Cloudflare probe can stay green while an application is unavailable. That's the intended division of work, but it has a limit worth spelling out once: if an edge loses both paths for a service while the peer can still serve that service to visitors arriving directly, the shared ingress monitor won't redirect only that domain. Separate service pools could make that choice. Here, the private fallback handles the per-service routing, and Prometheus exposes the detailed path states. <a href="https://developers.cloudflare.com/load-balancing/monitors/">Cloudflare's monitor documentation</a> explains the pool health side.</p>
 
-<h3>A policy example: the browser route comes first</h3>
-<p>
-The media policy makes the exception explicit. This is the policy structure rendered by the template,
-including the configured challenge difficulty:
-</p>
+<p>Getting the monitor green also produced one of the more concrete mistakes in the deployment. Both endpoints reported a TLS name mismatch, while the local HTTPS test with the intended hostname worked. The fix was in the request headers: the hostname belongs in the value of <code>Host</code>, and the secret belongs in a second header. Two fields, two different jobs:</p>
 
+```text
+Host: edge-health.example.net
+X-Edge-Health-Token: <monitor secret>
+```
+
+<p>Cloudflare uses that Host for the monitor's TLS SNI. The endpoints' Host overrides stay empty so they don't take precedence over it. I left certificate verification on and corrected the name instead; <a href="https://developers.cloudflare.com/load-balancing/troubleshooting/common-error-codes/">the error reference</a> covers this case. For a local check, loopback is exempt from the external monitor-token requirement:</p>
+
+```bash
+curl --noproxy '*' --silent --show-error --max-time 10 \
+  --resolve edge-health.example.net:443:127.0.0.1 \
+  https://edge-health.example.net/_edge/entry-health
+```
+
+<p>That should return <code>edge-ready</code> with a verified certificate. It proves the local listener works. The external Cloudflare monitor still has to pass its own network, source and header checks, which is exactly where the mismatch showed up.</p>
+
+<h2>The browser challenge meets the actual clients</h2>
+
+<p>With the routes in place, <a href="https://github.com/TecharoHQ/anubis">Anubis</a> sits in front of each application on each edge. Its listeners and metrics remain on loopback, and each instance gets its own target and policy directory. Browser-facing routes receive the proof-of-work challenge. The complications start with API clients, notification streams and media playback, because those requests still need to work without a browser solving anything. The policies therefore follow how the application is used, rather than applying the same challenge to every request.</p>
+
+<p>The media policy is a good example. Its web interface and bare root receive a challenge, including mixed-case variants of the web path. The remaining routes pass through to the application's own authentication, so native clients, API calls, media requests and sockets can work. The specific rule has to come before the catch-all allowance:</p>
 
 ```yaml
 bots:
@@ -341,69 +160,29 @@ bots:
     action: ALLOW
 ```
 
+<p>An <code>ALLOW</code> here skips Anubis's challenge; the application still checks the account or token. I checked that distinction anonymously on both edges: the tested private routes for users, sessions, libraries, server settings and API keys returned 401. The server-information route remained public, the public user-list route returned an empty list, and HAProxy blocked <code>/health</code> and <code>/metrics</code> with 404. The protected edge readiness route returned 403 without its secret. Those checks cover the tested routes, not every permission or plugin, but they establish why blocking the entire API would break the clients rather than solve the access question.</p>
 
-<p>
-The web rule precedes the catch-all allowance, and its match is case-insensitive. The path restrictions in
-HAProxy run before selecting the local or remote route, so choosing the peer cannot skip those restrictions.
-</p>
-<p>
-The notification client needs a different list: message delivery, stream connections and client/application routes belong to
-its normal API use. The request application needs its API routes for the web UI as well as integrations. Reusing the same
-blanket browser policy everywhere would have been simpler YAML and broken clients.
-</p>
-<p>
-The containers also have distinct targets and policy directories. A policy-content hash in their labels causes
-a recreation when the policy changes. Mounting a directory rather than a single policy file avoids keeping an
-old file inode mounted after an atomic replacement.
-</p>
+<p>Other clients need different exceptions. Notification delivery and streaming use their API routes; a request application's web UI can depend on its API as well as external integrations. Changing a policy changes its content hash in the container labels, which causes a recreation. The policies are mounted as directories so replacing a file atomically doesn't leave a container reading an old inode. HAProxy also normalizes the relevant application paths and rejects ambiguous encodings before applying restrictions. Otherwise, a rule for <code>/admin</code> could miss an equivalent encoded request before Anubis even enters the discussion.</p>
 
-<h2>The media service gets the grey cloud</h2>
-<p>
-The other web services use proxied Cloudflare load balancers. The media service uses a DNS-only load balancer backed by
-the same edge pool. Cloudflare participates in DNS selection and monitoring; the client connects directly to
-an edge for HTTPS. The video traffic does not cross Cloudflare's reverse proxy.
-</p>
-
+<p>The media entrance needed another change: it uses a DNS-only Cloudflare load balancer. Cloudflare selects healthy addresses through DNS, then the client connects directly to an edge over HTTPS. The video doesn't cross Cloudflare's reverse proxy. The other web entrances remain proxied.</p>
 
 ```text
 DNS:    media hostname → healthy edge address
 HTTPS:  client → edge-a or edge-b → Anubis → home NPM → the media service
 ```
 
+<p>That required adjusting the service's source restriction before switching its DNS. The proxied vhosts accept Cloudflare sources and explicit administration exceptions; a direct media client needs to be accepted on its own vhost. Just changing the cloud colour would have left ordinary users with a 403. I checked the direct route from the administration connection first, then from a phone outside that exception. The logs showed the external client reaching the second edge directly, and login and playback worked. Testing only from the allowlisted connection would have missed a broken public rule.</p>
 
-<p>
-<a href="https://developers.cloudflare.com/reference-architecture/architectures/load-balancing/">Cloudflare
-documents both proxied and DNS-only load balancing</a>. In the latter case, failover depends on detection and
-DNS caching. An ongoing stream does not migrate, and a client can keep using a cached address for a while.
-</p>
-<p>
-This needed a configuration change before the DNS switch. The proxied services accept public application
-traffic from Cloudflare sources, plus explicit administrative exceptions. The media service needs to accept direct
-clients on its own vhost. Turning the cloud grey without changing that restriction would have produced a very
-well-protected 403 page.
-</p>
-<p>
-I first tested from the administration connection, then from a phone outside that exception. The logs
-confirmed direct client traffic on the second edge. Login and playback worked. That external test matters:
-testing only through an allowlisted administration address can hide a broken public access rule.
-</p>
+<p>DNS caching still applies, and an open stream doesn't migrate when an edge fails. That's part of the <a href="https://developers.cloudflare.com/reference-architecture/architectures/load-balancing/">DNS-only load-balancing model</a>. The configuration gives new connections another available entrance after detection and resolution; it doesn't pick up a running video connection and carry it across.</p>
 
 <figure>
 <img src="../img/application-lb.png" alt="Anonymized Cloudflare application load balancer showing a healthy shared pool and two endpoints" loading="lazy" />
 <figcaption>An application load balancer after migration, with its identifying labels replaced: one healthy pool with both endpoints. This row shows pool health, not application login behavior.</figcaption>
 </figure>
 
-<h2>One catalogue instead of seven copies of everything</h2>
-<p>
-Getting it running was half the job. Adding the eighth service shouldn't require remembering every place where
-the first seven were listed.
-</p>
-<p>
-The exposure configuration now lives in <code>docker/haproxy/vars/services.yml</code>. Each service declares a
-permanent ID, domain, origin, policy profile and any special health or access rules. A shortened, anonymized
-example:
-</p>
+<h2>Teaching Semaphore what an application looks like</h2>
 
+<p>Once the routing existed, the next question was maintenance. Adding another application shouldn't mean finding every list of ports and services in several templates and hoping I remembered all of them. The configuration now starts with <code>docker/haproxy/vars/services.yml</code>: one entry for the domain, origin, permanent ID, policy profile and any application-specific health or access rules. This is an illustrative entry, with the origin and domain replaced:</p>
 
 ```yaml
 haproxy_service_catalog:
@@ -419,72 +198,15 @@ haproxy_service_catalog:
     dns: manual
 ```
 
+<p>The ID stays put even if the YAML entries move around. It gives us Anubis port <code>8922 + ID</code>, local metrics port <code>9200 + ID</code>, and private gateway port <code>18922 + ID</code>. For ID 1, those are 8923, 9201 and 18923. Deleting a different entry won't renumber that application. The catalogue compiler checks the IDs, profiles, defined origins and derived port collisions, then feeds generic templates for the routing, containers, policies, probes and managed Headscale permissions.</p>
 
-<p>
-The ID determines the local Anubis, metrics and private gateway ports. It stays stable when entries move
-around in the YAML. Removing one service must not silently renumber every other listener.
-</p>
-<p>
-The catalogue generates HAProxy routing, Anubis instances and policies, origin probes, private fallback paths,
-and the required managed Headscale rules. A separate plan playbook validates the declarations without
-contacting the VPS machines or changing DNS:
-</p>
-
+<p>There is a separate Semaphore plan task with a local inventory and no deployment secrets. It validates the declarations and writes a service summary and ACL fragment on the runner. It makes no VPS or DNS changes, and doesn't test the network:</p>
 
 ```bash
 ansible-playbook -i localhost, docker/haproxy/plan_services.yml
 ```
 
-
-<p>
-That plan runs in a separate Semaphore template with a local inventory and no deployment secrets. It catches
-declaration errors. It does not prove that an origin answers over the network.
-</p>
-<p>
-Application deployment remains separate. The catalogue does not create a database, configure backups or
-install a new service. First deploy the application privately and verify it. Then declare how the edges should
-expose it.
-</p>
-
-<h3>The ports are derived, not counted by hand</h3>
-<table>
-<thead><tr><th>Listener</th><th>Formula</th><th>Example for ID 1</th><th>Exposure</th></tr></thead>
-<tbody>
-<tr><td>Anubis HTTP</td><td>8922 + ID</td><td>8923</td><td>Loopback only</td></tr>
-<tr><td>Anubis metrics</td><td>9200 + ID</td><td>9201</td><td>Loopback only</td></tr>
-<tr><td>Private edge gateway</td><td>18922 + ID</td><td>18923</td><td>Overlay address only</td></tr>
-</tbody>
-</table>
-<p>
-The compiler checks IDs, origins, supported profiles and derived listener collisions. An entry doesn't get to
-refer to an arbitrary undefined origin. A disabled service leaves the active routing and Compose definition,
-and managed permissions can be removed on the next deployment. Its data and public DNS are not automatically
-deleted.
-</p>
-<p>
-The plan writes a service summary and a Headscale ACL fragment on the runner. That gives me something concrete
-to review before a deployment. It also keeps the maintenance path short: edit the catalogue, inspect the plan,
-deploy to the edges, check the application, then publish the domain separately.
-</p>
-<h3>Adding an eighth service</h3>
-<p>
-For a new application behind home NPM, I first create its Proxy Host and confirm the internal application
-works. NPM needs a valid certificate for the application hostname, and WebSocket support when the service uses
-it. From the edge, testing with private resolution keeps TLS verification meaningful:
-</p>
-
-
-```bash
-curl --noproxy '*' --connect-timeout 5 --max-time 15 \
-  --resolve app.example.net:443:NPM_PRIVATE_IP \
-  -I https://app.example.net/
-```
-
-
-<p>
-Then comes a catalogue entry. This example is illustrative; it is not an eighth deployed service:
-</p>
-
+<p>For an application behind home NPM, the practical sequence is to deploy it privately, configure its Proxy Host and certificate, enable WebSocket support if needed, and check the private HTTPS route from the edges. Then add its exposure entry. Here is an eighth-service example, not another application currently deployed:</p>
 
 ```yaml
   example_app:
@@ -501,216 +223,63 @@ Then comes a catalogue entry. This example is illustrative; it is not an eighth 
     dns: manual
 ```
 
+<p>The catalogue owns the exposure configuration. The application's database, persistent data and backups belong to its own deployment. A client that cannot solve a browser challenge can use <code>profile: native</code>, with an explicit health route returning 200; behavior outside the supported profiles still needs a code change. Similarly, disabling an entry removes its active routes and containers from this project and allows the managed ACLs to be withdrawn, but doesn't delete the application data or automatically remove its public DNS.</p>
 
-<p>
-For HTTPS origins, Anubis uses the application hostname while the deployment pins that name to the private
-address. The HAProxy origin probe also sends the right SNI and verifies the certificate against that name.
-Connecting privately is no excuse for adding <code>-k</code> and hoping for the best.
-</p>
-<p>
-A service with clients that cannot solve a browser challenge may need <code>profile: native</code> and an
-explicit health route returning 200. That choice leaves authentication with the application. A new policy
-behavior outside the existing profiles is a code change, not something the catalogue can guess.
-</p>
+<p>The actual deployment task runs <code>docker/haproxy/deploy_haproxy.yml</code> serially across the edges. It checks the target, mesh membership, routes and origin responses; obtains the certificate; pulls the selected images; and validates the candidate configuration with the downloaded HAProxy image before installing it. Then it checks the local TLS routes, challenges, redirects and restrictions, followed by the local and peer application paths. The images deliberately remain <code>haproxy:lts</code> and Anubis <code>latest</code>, so a deployment can also update an image. So the job's changes can include an image update as well as my configuration.</p>
 
-<h2>What Semaphore actually does</h2>
-<p>
-Semaphore runs <code>docker/haproxy/deploy_haproxy.yml</code> from the repository, with the inventory, SSH
-credentials, privilege-escalation settings and secret variable group. The pair deploys serially, one edge at a
-time.
-</p>
-<p>
-The playbook checks the target and mesh membership, verifies routes and origin responses, obtains the
-certificate, pulls the selected images, and validates the candidate HAProxy configuration with the downloaded
-image before installing it. After deployment it checks TLS, challenges, aliases, restrictions and readiness.
-With peer readiness required, a healthy fallback cannot hide a broken local path: both receive their own
-checks.
-</p>
-<p>
-The images intentionally use <code>haproxy:lts</code> and Anubis <code>latest</code>. A deployment can
-therefore bring an image update as well as a configuration change. That's part of how this lab is operated,
-not a claim that a moving tag is reproducible.
-</p>
-<p>
-Four secrets have separate jobs:
-</p>
-<ul>
-<li>The Cloudflare DNS API token is used for DNS-01 certificate validation and the dedicated edge DNS records.</li>
-<li>The Anubis signing key is shared by the instances on both edges.</li>
-<li>The monitor token authorizes external health probes.</li>
-<li>The metrics token authorizes Prometheus collection.</li>
-</ul>
-<p>
-They are stored as secret extra variables in Semaphore. The playbook also supports environment fallbacks, but
-there is no reason to define competing copies in both places.
-</p>
-<p>
-Headscale management runs through delegated Ansible tasks on the control host. It reads the active policy,
-updates the rules owned by this deployment, validates a candidate with Headscale, backs up the previous file
-and reloads the policy. An adjacent tracking file records which rules it owns so obsolete permissions can be
-removed. The rest of the policy stays intact.
-</p>
-<p>
-Cloudflare application load balancers remain configured separately. The playbook manages dedicated DNS-only
-edge names, and has an optional single-primary DNS publication mode. That mode points at one edge; it is not
-the two-edge load balancer. The migrated services keep manual application publication in the catalogue.
-</p>
+<p>Semaphore supplies four separate secrets: the DNS API token, shared Anubis signing key, monitor token and metrics token. They go in secret extra variables, with environment-variable fallbacks supported by the playbook. The SSH account and sudo settings have to work on the edges and on the control host receiving delegated Headscale tasks. That delegation reads the active policy, replaces only the rules owned by this deployment, validates a candidate, backs up the old policy and reloads when necessary. An adjacent tracking file remembers the managed rules so permissions can be removed later without replacing the rest of my policy.</p>
 
-<h3>Bootstrap, then require the peer</h3>
-<p>
-The first edge cannot pass a peer check against a machine that hasn't been deployed yet. Bootstrap therefore
-happens with peer readiness not required. Once both stacks run, I enable the blocking peer validation and
-deploy again:
-</p>
-
+<p>Bootstrap needs a small exception. The first edge cannot validate a peer stack that hasn't been installed yet, so peer readiness isn't required for the initial rollout. After both stacks are running, I enable the blocking check and deploy again:</p>
 
 ```yaml
 haproxy_edge_redundancy_enabled: true
 haproxy_edge_require_peer_ready: true
 ```
 
-
-<p>
-That second setting stays enabled for normal operation. It makes an incomplete peer configuration fail the
-deployment instead of quietly shipping a broken fallback. A maintenance window on the peer can make this
-validation fail even while the running local path continues serving users; deployment success and current
-local availability are different questions.
-</p>
-<p>
-The deployment template targets the edge inventory group. A typical ordinary extra-variable selection, with
-aliases substituted, is:
-</p>
-
+<p>That stays enabled afterward. A healthy peer mustn't hide a broken local installation during deployment, and a healthy local installation mustn't let a broken backup slip through. The normal target selection is simply the edge inventory group:</p>
 
 ```json
 {"target_hosts": "vps_haproxy"}
 ```
 
+<p>The Cloudflare application load balancers are still managed separately. The playbook handles dedicated DNS-only edge records and offers a simple publication mode toward a single primary edge, but that single-primary mode doesn't give us the public two-edge arrangement. The migrated applications keep <code>dns: manual</code>. The catalogue and a green Semaphore run aren't a hidden instruction to switch all the public names.</p>
 
-<p>
-The SSH account must work on each edge and on the host receiving delegated Headscale tasks. Collections also
-have to be available to the runner. In the successful deployment, Galaxy installation is skipped because the
-execution environment already has its required collections. Skipping that step does not install missing
-modules.
-</p>
-<h3>A successful run, with the retries left in</h3>
-<p>
-The migration deployment completed on both edges with no unreachable hosts and no failed tasks. I retain the full job output privately; this article describes the checks without publishing its application inventory.
-</p>
-<p>
-Before completing the run, both edges retried the per-domain HTTPS check once. The eventual checks passed. A
-retry message in the middle of this log is therefore not a failed final deployment, but it is still useful
-information about startup convergence.
-</p>
-<p>
-The run checked every configured service's public TLS route on the selected node, its browser-policy behavior
-where applicable, the four blog-alias redirects, and service readiness. It then checked the local paths
-separately and required every configured peer path. That last distinction prevents a working peer from masking a
-broken local installation during rollout.
-</p>
-<p>
-The access tests included the blog API and administration paths, an encoded-path case, the media service health and
-metrics restrictions, and the metrics route. They verify the specific expected responses in the playbook; they
-aren't a full application penetration test.
-</p>
-<p>
-The Headscale candidate was validated during this run. Reloading was skipped because the active policy did not
-change. Temporary candidate files also count as changes in the job. A change counter is not a count of application settings altered.
-</p>
-<p>
-The application publication task was skipped, and the final message explicitly left the Cloudflare pools and
-affinity unchanged. Semaphore also reported successful delivery of its deployment notification. That is useful
-deployment feedback, alongside the separate functional notification tests.
-</p>
+<h2>And then the deployment had opinions</h2>
 
+<p>The first edge took several runs to get right. There were runner dependency and proxy issues, followed by SSH account and sudo settings to align with the working Semaphore templates. The successful execution skips Galaxy installation because the collections are already available on the runner; skipping the step doesn't make a missing collection appear. Once those prerequisites passed, Certbot reached Cloudflare and ran into the token's source-address restriction. The API request came from the edge's public egress, because Certbot runs there. The token needed to allow that address, and eventually the second edge's, for issuance and future renewals.</p>
 
-<h2>The bits that complained during deployment</h2>
-<p>
-The first edge did not materialize from one flawless green Semaphore run. There were runner dependency and
-proxy issues, then SSH user and sudo settings to align with the working templates. Having a valid SSH key is
-only useful if the template chooses the account that can use it.
-</p>
-<p>
-Certificate issuance then failed because the Cloudflare token restricted the allowed source addresses. Certbot
-runs on the edge, so Cloudflare saw the edge's public egress, not the Semaphore runner. The token needed to
-authorize each issuing edge for renewals too.
-</p>
-<p>
-Certificates are obtained locally through DNS-01. The renewal hook assembles the certificate and private key,
-checks that they match, validates HAProxy and signals its master to reload. If validation or signalling fails,
-it restores the previous PEM on disk. That is a local safeguard, not a full transactional rollback of a
-deployment.
-</p>
-<p>
-Later, both Cloudflare endpoints showed a TLS name mismatch even though the local HTTPS probe worked. The fix
-was in the monitor headers:
-</p>
+<p>Each edge obtains its certificate through DNS-01 and renews it locally. The renewal hook assembles the certificate and private key, checks that they match, validates HAProxy and signals the master to reload. If validation or signalling fails, it restores the previous PEM on disk. That safeguard covers this local step; it doesn't turn the whole playbook into a transaction. The final successful deployment still needed one retry of the per-domain HTTPS check on each edge. Both passed on the next attempt.</p>
 
+<p>By the end, neither edge had an unreachable host or failed task. The checks covered the application TLS routes and browser challenges, the blog-alias redirects, restricted and encoded paths, local readiness and every configured peer route. The Headscale candidate was valid, and its reload was skipped because the active policy hadn't changed. Temporary candidate files still counted as changes in the job. The application publication task was skipped, the Cloudflare pool settings stayed untouched, and the deployment notification arrived. The full log stays private; publishing it would also publish the inventory embedded in its task results.</p>
 
-```text
-Host: edge-health.example.net
-X-Edge-Health-Token: <monitor secret>
+<p>There is one other boundary in the request handling that I don't want buried in the diagrams. HAProxy only accepts <code>CF-Connecting-IP</code> as the visitor address when the connection actually comes from a configured Cloudflare range. Other connections use their real source address. It rebuilds the forwarding headers before passing requests downstream, while monitor and metrics access rules still check the real network peer. An arbitrary client mustn't get the administration exception by supplying a convenient header. The trusted ranges are an explicit configuration snapshot, so they need periodic review. The logs also leave out request URLs, since some clients carry credentials in query strings.</p>
+
+<h2>Time to stop something</h2>
+
+<p>I tested the new entrances before changing the application DNS. Local resolution overrides let the browser keep the real hostname and certificate while connecting to the new edge, with other visitors still using the old entrance. For command-line checks, <code>curl --resolve</code> does the same thing; the address below is a documentation address:</p>
+
+```bash
+curl --noproxy '*' --silent --show-error \
+  --connect-timeout 5 --max-time 15 \
+  --resolve app.example.net:443:192.0.2.10 \
+  --output /dev/null \
+  --write-out 'HTTP %{http_code}, TLS %{ssl_verify_result}\n' \
+  https://app.example.net/
 ```
 
+<p>A zero TLS verification result confirms the certificate check, but HTTP 200 can still be the challenge page. I had to go through the application logins, watch live updates, receive notifications and test playback. The readiness and metrics routes were also checked from an unauthenticated workstation and returned 403. Those are different checks from using the applications, and both mattered before the public move.</p>
 
-<p>
-Those are two headers. The technical hostname is the value of <code>Host</code>; it is not a header name. The
-monitor uses that Host for TLS SNI. Endpoint Host overrides stay empty so they don't replace the intended
-name. Certificate verification stayed enabled. <a
-href="https://developers.cloudflare.com/load-balancing/troubleshooting/common-error-codes/">Cloudflare's error
-reference</a> covers this mismatch.
-</p>
+<p>For the first controlled failure, I stopped one application's Anubis container on edge-a while leaving its common origin running. Requests still entering edge-a selected the peer backend, and a WebSocket opened through edge-b. That exercised the private fallback without deliberately taking the shared application down. The public migration then started with one status service: after enabling its Cloudflare load balancer, I stopped HAProxy on edge-a. Cloudflare detected the failed entrance, the other edge served the application, and I restored edge-a and waited for health to settle.</p>
 
-<h2>Trust the connection before trusting its headers</h2>
-<p>
-For proxied requests, HAProxy accepts the visitor address in <code>CF-Connecting-IP</code> only when the
-actual connection comes from a configured Cloudflare range. Otherwise, the connection source is the client
-address. It rebuilds forwarding headers before passing traffic downstream.
-</p>
-<p>
-Without that boundary, anyone able to reach the listener could claim to be the administration address by
-supplying a header. Source filters for metrics and monitors use the real network peer, not the reconstructed
-visitor address.
-</p>
-<p>
-The Cloudflare ranges are an explicit snapshot in configuration. They need review when Cloudflare changes
-them. Anubis stays on loopback, private gateways stay on the overlay, and the unauthenticated local Prometheus
-exporter stays on loopback too.
-</p>
-<p>
-HAProxy logs connection and backend information without logging request URLs. The notification service and the media service can carry
-credentials in query strings; those URLs do not belong in a log excerpt pasted into a blog post.
-</p>
+<p>These tests stop different containers for different reasons: an application Anubis has a name such as <code>haproxy-prod-anubis-example_app</code>, while <code>haproxy-prod</code> is HAProxy itself. Restoring the stopped container and checking recovery is part of the test. The first case proves that one service can use its peer path; the second proves that the public entrance can move. Neither test implies that an open socket teleports to another machine.</p>
 
-<h2>Yes, there are graphs</h2>
-<p>
-The existing Prometheus stack collects HAProxy metrics over public HTTPS using dedicated DNS-only names for
-each edge. The monitoring host doesn't need to join the mesh. The metrics route requires both an authorized
-source address and its own Bearer token.
-</p>
-<p>
-Grafana can then show traffic, sessions, backend errors and health by edge and service. Local Anubis and
-origin states remain separate, with the peer path alongside them. A green peer path can keep the application
-reachable while a local component needs repair.
-</p>
-<p>
-Traffic share needs some restraint when interpreting it. HAProxy sees requests that reach the edges, not
-requests already satisfied by Cloudflare's cache. A video stream and a blog visit aren't comparable units of
-work. Equal endpoint weights won't make those graphs perfectly symmetrical.
-</p>
-<p>
-Likewise, HAProxy metrics don't contain Cloudflare's actual pool verdict. That belongs to Cloudflare's monitor
-and event view. And a dashboard import doesn't install Prometheus alert rules or configure notification
-delivery. The reference rules still need to be loaded and connected to the existing alerting setup.
-</p>
+<p>The remaining proxied names followed gradually, with logins and notifications checked after switching. The root and <code>www</code> aliases were pointed at the blog and their redirects checked. The media entrance moved separately through its DNS-only load balancer, followed by the external phone test. Only after those paths worked did I disable the old application vhosts, validate and reload Nginx, check the retained services, and stop the redundant old Anubis containers.</p>
 
-<h3>The scrape configuration</h3>
-<p>
-Each target has a dedicated DNS-only name. If I used an application load-balancer name here, I could scrape
-whichever edge got selected twice and believe I was observing both. The labels and targets below are
-anonymized, and the proxy address stands in for the monitoring stack's existing outbound proxy:
-</p>
+<p>The origin application containers stayed running, because the new edges still use them. Nginx and Certbot also stayed where other active services needed them, including the Headscale entrance. Retaining the previous application CNAME records helped with DNS rollback during migration, but once a vhost is disabled, reverting DNS alone is no longer enough: that old vhost has to be restored too. The older Nginx deployment playbook belongs to that previous entrance, so rerunning it during cleanup would risk recreating what I had just retired.</p>
 
+<h2>The graphs, now with traffic in them</h2>
+
+<p>The existing Prometheus stack scrapes the edges over public HTTPS, using a dedicated DNS-only name for each machine. It doesn't join the mesh. The metrics endpoint requires both the authorized public source and a separate Bearer token, while the unauthenticated exporter remains on loopback. Giving Prometheus an application load-balancer name would defeat the point: two scrapes could reach the same selected edge while looking like two independent observations. Here is the job structure, with generic targets and a placeholder for the monitoring stack's existing outbound proxy:</p>
 
 ```yaml
 scrape_configs:
@@ -734,187 +303,33 @@ scrape_configs:
           edge: b
 ```
 
+<p>The token file has to be readable inside the Prometheus container, and the source allowlist has to match the actual egress of that connection. After that, <code>up{job="haproxy-edges"}</code> tells us whether the scrape succeeded. The application states come from the other metrics. Grafana can then put traffic, sessions, backend errors, origin probes and the available service paths next to each other, instead of collapsing everything into one green square.</p>
 
-<p>
-The secret file must be mounted and readable inside Prometheus. The source restriction on HAProxy needs to
-match the actual public egress of that scrape path. A correct token coming from another source is still
-refused.
-</p>
-<p>
-The basic reachability query is <code>up{job="haproxy-edges"}</code>. A value of one means the scrape
-succeeded. It does not mean every application is up, nor that Cloudflare agrees with HAProxy about an
-endpoint's state.
-</p>
 <figure>
 <img src="../img/traffic.png" alt="Grafana scrape availability, traffic share, per-service response rates and response bytes for the two anonymized edges" loading="lazy" />
 <figcaption>A real observation window after migration. Both scrape series are at one; traffic reaching Anubis is uneven across the two edges. Legend labels have been anonymized.</figcaption>
 </figure>
 
-<p>
-The traffic screenshot shows a larger slice for one edge and a short burst of media response bytes. It is a
-snapshot of requests and bytes reaching this layer, not a benchmark or a unique-user count. Equal configured
-weights do not make an uneven short window evidence of a routing fault.
-</p>
+<p>This window has both scrape series at one and an uneven traffic split. That's entirely compatible with equal configured weights: sessions have different sizes, a media stream moves far more bytes than a short page visit, and requests satisfied by Cloudflare's cache never reach these backends. I read this as traffic arriving at the edges, not as a count of unique visitors or proof that each machine got exactly half the users.</p>
+
 <figure>
 <img src="../img/health.png" alt="Grafana service-path and origin health, active backend sessions and backend 5xx responses" loading="lazy" />
 <figcaption>The sampled health window contains brief drops and a few backend errors, followed by healthy values. The screenshot alone does not identify their cause.</figcaption>
 </figure>
 
-<p>
-There is a naming trap in this dashboard version: the panel titled "Anubis health" displays <code>be_*</code>
-series. With redundancy enabled, those backends represent service paths through the private gateways. I read
-them alongside the <code>probe_*</code> origin series, rather than treating that title as proof of an isolated
-Anubis process state.
-</p>
-<p>
-The short health drops and error peaks are visible around the same part of the window. To assign a cause, I
-would need the corresponding logs and a time-aligned deployment or incident event. These captures don't
-establish an end-user outage duration.
-</p>
+<p>There are brief health drops and backend error peaks in the sample. Their cause would need the matching logs and time-aligned events; the capture alone doesn't establish how long a visitor lost access. There is also a dashboard naming trap here: "Anubis health" displays <code>be_*</code> series, which in the redundant configuration represent service paths through the gateways. I read that panel with the <code>probe_*</code> origin series rather than treating its title as a measurement of an isolated Anubis process.</p>
+
 <figure>
 <img src="../img/latency.png" alt="Grafana rolling backend response times and health-check failure rates" loading="lazy" />
 <figcaption>Rolling response time and check failures. The health-check legend containing infrastructure labels has been removed; the plotted samples are unchanged.</figcaption>
 </figure>
 
-<p>
-One rolling response-time series rises to roughly 850 ms and then stays flat in this window. That's a reason
-to inspect the underlying samples and request volume, not enough information to announce a regression or a
-percentile. The panel is a rolling average; it doesn't show a p95 latency, and a quiet service can retain a
-value without generating much new traffic.
-</p>
+<p>One rolling response-time series reaches roughly 850 ms and stays there in the displayed window. It's an average, not a p95, and a quiet service can retain a value without much new traffic. That gives me something to inspect, not a latency diagnosis by itself. Likewise, these metrics don't contain Cloudflare's actual endpoint verdict; that lives in its monitor and event view. The reference alert rules need to be loaded and connected to notification delivery separately. Importing the dashboard doesn't install the alerts.</p>
 
-<h2>The migration, with things deliberately stopped</h2>
-<p>
-I deployed and tested the edges before changing the public application names. Local resolution overrides let
-the browser use the real hostname and certificate while contacting the new machine. The public DNS still
-served the older entrance during those tests.
-</p>
-<p>
-The checks went beyond seeing a challenge page: application logins, live updates, notifications and the media service
-playback all needed their own tests. Both edges also passed the deployment's local and peer
-readiness checks with peer validation required.
-</p>
-<p>
-For the private fallback test, one application's Anubis on edge-a was stopped. Requests entering edge-a used the
-peer path, and a WebSocket opened through edge-b. The application origin stayed running. That tested the
-fallback layer without deliberately taking the shared application down.
-</p>
-<p>
-The public migration started with one status service. After its load balancer was active, HAProxy on edge-a
-was stopped. Cloudflare detected the failed entrance, the other edge served the status application, and edge-a
-was restored. This was an actual stop-and-recover test; it wasn't just two green endpoints sitting next to
-each other.
-</p>
-<p>
-The remaining proxied services followed, with logins and notifications checked after migration. The root
-domain and <code>www</code> were pointed at the blog and their redirects checked. The media service moved separately to
-DNS-only load balancing, followed by direct access and playback tests from the phone.
-</p>
-<p>
-Finally, the old application vhosts were disabled and the redundant old Anubis containers stopped. The
-application containers stayed running: the new edges still use them. Nginx and Certbot also stayed where other
-active services needed them, including the Headscale entrance. Disabling those old vhosts means rollback now
-requires restoring them as well as changing the public routing.
-</p>
+<h2>Where this leaves the lab</h2>
 
-<h3>The commands behind the checks</h3>
-<p>
-A direct test can target the new edge without changing public DNS. This example address is a documentation
-address, not one of my VPS addresses:
-</p>
+<p>The public entrance is now redundant, with a private fallback for each application's path and a catalogue for maintaining the exposure configuration. The application origins are still shared. If a single application instance fails, both edges lose it; if the home connection, gateway or NPM fails, several private paths can fail together. Both VPS instances also remain with one provider, and the proxied entrances depend on Cloudflare. Those are the boundaries shown in the separate red panel of the diagram.</p>
 
+<p>The deployment, access checks and controlled stops are done, and the old application entrances have been retired without deleting the origins underneath them. For the next application, there is a private deployment to prepare, a catalogue entry to review and an edge rollout to run. Replicating the application and its data is still its own project. This weekend's one already had enough moving parts.</p>
 
-```bash
-curl --noproxy '*' --silent --show-error \
-  --connect-timeout 5 --max-time 15 \
-  --resolve app.example.net:443:192.0.2.10 \
-  --output /dev/null \
-  --write-out 'HTTP %{http_code}, TLS %{ssl_verify_result}\n' \
-  https://app.example.net/
-```
-
-
-<p>
-The hostname stays in the URL so Host and SNI remain correct. A TLS verification result of zero and a valid
-response establish the connection, but HTTP 200 may still be an Anubis challenge. The next step is opening the
-application and using it.
-</p>
-<p>
-On the edge itself, the common monitor can be checked over loopback with certificate verification intact:
-</p>
-
-
-```bash
-curl --noproxy '*' --silent --show-error --max-time 10 \
-  --resolve edge-health.example.net:443:127.0.0.1 \
-  https://edge-health.example.net/_edge/entry-health
-```
-
-
-<p>
-The expected body is <code>edge-ready</code>. Loopback is exempt from the external monitor token requirement.
-That local result cannot prove Cloudflare's external probe source, headers or firewall access are correct.
-</p>
-<p>
-The two controlled stop tests exercise different layers:
-</p>
-<table>
-<thead><tr><th>Stopped component</th><th>Expected routing</th><th>Evidence used</th></tr></thead>
-<tbody>
-<tr><td>One service's local Anubis</td><td>That service enters the same edge, then uses the peer</td><td>Peer backend selection and a working application/WebSocket</td></tr>
-<tr><td>One edge's HAProxy</td><td>Cloudflare marks that entrance unavailable and selects the other</td><td>Cloudflare state, surviving edge logs and browser access</td></tr>
-</tbody>
-</table>
-<p>
-For the first case, the relevant container name has the shape <code>haproxy-prod-anubis-example_app</code>. For
-the second, it is <code>haproxy-prod</code>. The restoration is starting that same container again and waiting
-for health checks to settle. These were controlled tests during migration, not commands to run casually
-against both entrances at once.
-</p>
-<p>
-I also kept the public readiness and metrics routes in the negative tests: an unauthenticated request from the
-workstation received 403. A monitoring route that returns the expected data only to its authorized caller is
-behaving differently from one that happens to answer everyone.
-</p>
-<h3>Cleaning up without deleting the origins</h3>
-<p>
-The old application CNAME records were retained while the same-name Cloudflare load balancers took over public
-routing. That made the DNS side of rollback simpler during migration. It did not preserve the old application
-entrance after its Nginx vhost was disabled.
-</p>
-<p>
-The cleanup therefore happened in stages: disable migrated application vhosts, validate and reload Nginx,
-check the retained services, then stop the old Anubis containers. The origin applications, the control-plane
-entrance and other still-used vhosts remained in place. Certificates weren't removed just because one
-application name had migrated.
-</p>
-<p>
-This is also why the old Nginx deployment playbook isn't part of the new edge procedure. Rerunning it during
-cleanup could recreate the entrance I had just retired. The two playbooks belong to different architectures.
-</p>
-
-<h2>What two edges do not fix</h2>
-<p>
-Both entrances use the same application origins. If a single application instance fails, neither edge can
-manufacture a replacement application. If the home connection, home gateway or NPM fails, the home-hosted services can lose
-both paths at once.
-</p>
-<p>
-The pair also remains with one VPS provider, and Cloudflare is still a dependency for the proxied services.
-Different locations reduce some shared failure risks; they don't remove every one.
-</p>
-<p>
-What is deployed now is a redundant public entrance, with per-service private fallback and a catalogue that
-makes the next addition less tedious. Application availability still depends on each application's own
-storage, backups and redundancy.
-</p>
-<p>
-Seven services migrated, two entrances answering, and a stopped edge no longer being the end of the story.
-That's a useful place to leave this round of homelab-ing.
-</p>
-<p>
-Thanks for reading me,
-</p>
-<p>
-spleenftw
-</p>
+<p>Thanks for reading me,<br>spleenftw</p>
