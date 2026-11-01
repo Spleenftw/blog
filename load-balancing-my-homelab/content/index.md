@@ -25,6 +25,8 @@ category: "network"
 
 <p>The public entrance to the homelab has changed again. In <a href="https://blog.interlope.xyz/my-homelab-setup-2">WIMH #2</a>, I described the VPS that forwards traffic into the lab over the overlay, without opening ports on the home connection. That arrangement is still there, but the entrance was mixed in with the application machines: Nginx, Anubis and the services they exposed shared those VPS hosts. This time I moved the public entry onto two dedicated machines, in different OVH locations, and put Cloudflare Load Balancing in front of them. Which sounds like a fairly contained change until you start following a request all the way through it.</p>
 
+<p>Of course, before any of that, I had to actually buy the VPS instances. OVH's stock had other plans. I ended up polling their availability API every 60 seconds, with a Python dashboard to watch the unavailable boxes and desktop notifications to jump on a slot when one appeared. Apparently clicking refresh was too simple, so buying the infrastructure became its own monitoring project. We hadn't deployed HAProxy yet and scope creep already had a dashboard.</p>
+
 <p>There is now HAProxy on each edge, an Anubis instance per application, private routes back to the origins, a fallback through the other edge, certificates to renew, and Semaphore deploying the whole thing from Git. The applications stayed where they were. The interesting work was getting the new entrances to reach them, deciding what should happen when something breaks, and then actually breaking the appropriate thing to check. Also, the media clients needed their own treatment. Asking a video player to solve a browser challenge was never going to be a good viewing experience.</p>
 
 <p>Same homelab, more plumbing. I'll call the entrances <code>edge-a</code> and <code>edge-b</code>, the application VPS machines <code>origin-a</code> and <code>origin-b</code>, and the home subnet router <code>home-router</code>. These are aliases. The addresses and hostnames in the examples are placeholders, the screenshot legends have been replaced, and I'm keeping the actual service catalogue and access policy private. You can follow the routing without getting a map of everything currently online.</p>
@@ -303,7 +305,14 @@ scrape_configs:
           edge: b
 ```
 
-<p>The token file has to be readable inside the Prometheus container, and the source allowlist has to match the actual egress of that connection. After that, <code>up{job="haproxy-edges"}</code> tells us whether the scrape succeeded. The application states come from the other metrics. Grafana can then put traffic, sessions, backend errors, origin probes and the available service paths next to each other, instead of collapsing everything into one green square.</p>
+<p>The token file has to be readable inside the Prometheus container, and the source allowlist has to match the actual egress of that connection. Before opening Grafana, I checked Prometheus's Targets page: the <code>haproxy-edges</code> job had both targets UP, with scrape durations of about 160 ms and 130 ms in this capture. Each endpoint goes straight to its own edge's <code>/_edge/metrics</code> route. The <code>job</code> label groups the scrapes, <code>instance</code> identifies the host and port, and the explicit <code>edge</code> label gives the dashboard a stable name to group by. The names below have been replaced to match the example configuration.</p>
+
+<figure>
+<img src="../img/prometheus-targets.png" alt="Prometheus haproxy-edges job showing two anonymized targets, edge-a and edge-b, both UP" loading="lazy" />
+<figcaption>Both edge metrics endpoints are UP. Endpoint hostnames and identifying labels have been replaced locally; scrape timings and states are unchanged.</figcaption>
+</figure>
+
+<p>Those two green badges mean Prometheus successfully scraped both metrics endpoints. They don't tell me whether a user can log in or whether an origin is healthy; that comes from the service-path and origin metrics, plus the application checks. <code>up{job="haproxy-edges"}</code> is the first thing to look at when a graph goes blank, before debugging an application that may be working perfectly well. Grafana can then put traffic, sessions, backend errors, origin probes and the available service paths next to each other, instead of collapsing everything into one green square.</p>
 
 <figure>
 <img src="../img/traffic.png" alt="Grafana scrape availability, traffic share, per-service response rates and response bytes for the two anonymized edges" loading="lazy" />
