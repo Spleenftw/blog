@@ -91,8 +91,17 @@ flowchart TB
     PROM -. "HTTPS /_edge/metrics" .-> HA
     PROM -. "HTTPS /_edge/metrics" .-> HB
 
-    LIMITS["Failure boundaries<br/>Cloudflare bypasses an unavailable public edge<br/>HAProxy bypasses a failed per-service path when its peer is healthy<br/>a failed shared origin is still unavailable<br/>open video streams and WebSockets must reconnect"]
-    ORIGINS -.-> LIMITS
+    subgraph BOUNDARIES["Failure handling and limits - explanatory notes"]
+        direction LR
+        LIMIT_EDGE["Public edge unavailable<br/>Cloudflare selects a healthy edge for new connections"]
+        LIMIT_PATH["One service path unavailable<br/>HAProxy uses the peer when its path is healthy"]
+        LIMIT_ORIGIN["Shared origin unavailable<br/>Both edges lose that application<br/>edge redundancy does not replicate origins"]
+        LIMIT_STREAM["Open video streams and WebSockets<br/>Existing connections do not migrate<br/>clients must reconnect"]
+        LIMIT_EDGE ~~~ LIMIT_PATH ~~~ LIMIT_ORIGIN ~~~ LIMIT_STREAM
+    end
+
+    %% Invisible positioning only: this is not a data-flow connection.
+    ORIGINS ~~~ BOUNDARIES
 
     classDef public fill:#233d58,stroke:#7ab5dc,color:#f2f6ff
     classDef edge fill:#284c44,stroke:#7bc8a7,color:#f2f6ff
@@ -105,4 +114,5 @@ flowchart TB
     class VPS,ROUTER,FW,NPM,APPS origin
     class GIT,PLAN,DEPLOY,SECRETS,HS,CERT,CFAPI ops
     class PROM,GRAF,ALERT monitor
-    class LIMITS note
+    class LIMIT_EDGE,LIMIT_PATH,LIMIT_ORIGIN,LIMIT_STREAM note
+    style BOUNDARIES fill:#291f2a,stroke:#dd9ba7,color:#fff5f6

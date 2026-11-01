@@ -85,7 +85,7 @@ earlier state of the lab.
 <p>This diagram separates visitor traffic from deployment, control and monitoring. Application groups are illustrative; no real service catalogue, hostnames or private addresses are included. Solid arrows show the main flow within each section, while dashed arrows identify secondary paths, checks or control operations.</p>
 <figure>
 <a href="../img/infrastructure-overview.png"><img src="../img/infrastructure-overview.png" alt="Detailed anonymized architecture: Cloudflare proxy and DNS-only access, two HAProxy and Anubis edges, private service failover, Tailscale origins, Semaphore deployment, Headscale policy, certificates and Prometheus monitoring" loading="lazy" /></a>
-<figcaption>Open the image at full size to follow the paths. Cloudflare checks the public entrance; each HAProxy checks its application paths. The shared origins remain a common dependency.</figcaption>
+<figcaption>Open the image at full size to follow the paths. The separate red panel explains failure handling and redundancy limits; it is not an infrastructure component or a traffic path. Cloudflare checks the public entrance; each HAProxy checks its application paths.</figcaption>
 </figure>
 <p>The <a href="../files/infrastructure-mermaid.txt">Mermaid source</a> describes this generic architecture. It is maintained documentation, not a production configuration export.</p>
 
