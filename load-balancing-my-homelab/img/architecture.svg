@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" viewBox="0 0 1000 660" role="img" aria-labelledby="title desc">
+<title id="title">Two public edges, private application origins</title><desc id="desc">Cloudflare proxies browser applications. Media clients connect directly following DNS selection. Each edge has HAProxy and seven local Anubis instances, with private fallback to its peer. Shared origins are reached over the Tailscale overlay.</desc>
+
+<rect width="1000" height="660" rx="16" fill="#101a2a"/>
+
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" x="500" y="36" font-size="23" font-weight="700">Two doors into the homelab</text>
+<rect x="60" y="65" width="350" height="70" rx="10" fill="#243b59" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="235.0" y="94">Web visitors</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="235.0" y="117">Browser applications through the Cloudflare proxy</text>
+<rect x="590" y="65" width="350" height="70" rx="10" fill="#243b59" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="765.0" y="94">Media clients</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="765.0" y="117">DNS selection, then direct HTTPS</text>
+<rect x="60" y="175" width="350" height="70" rx="10" fill="#443751" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="235.0" y="204">Cloudflare Load Balancing</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="235.0" y="227">One shared pool, two edge endpoints</text>
+<rect x="234" y="134" width="2" height="40" fill="#96acc7"/><polygon fill="#96acc7" points="235,175 239,166 231,166"/>
+<rect x="90" y="310" width="330" height="85" rx="10" fill="#243b59" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="255.0" y="339">edge-a</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="255.0" y="362">HAProxy + per-service loopback Anubis</text>
+<rect x="580" y="310" width="330" height="85" rx="10" fill="#243b59" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="745.0" y="339">edge-b</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="745.0" y="362">HAProxy + per-service loopback Anubis</text>
+<rect x="234" y="244" width="2" height="30" fill="#96acc7"/><rect x="234" y="274" width="20" height="2" fill="#96acc7"/><rect x="254" y="274" width="2" height="35" fill="#96acc7"/><polygon fill="#96acc7" points="255,310 259,301 251,301"/>
+<rect x="349" y="244" width="2" height="30" fill="#96acc7"/><rect x="349" y="274" width="395" height="2" fill="#96acc7"/><rect x="744" y="274" width="2" height="35" fill="#96acc7"/><polygon fill="#96acc7" points="745,310 749,301 741,301"/>
+<rect x="764" y="134" width="2" height="150" fill="#96acc7"/><rect x="764" y="284" width="50" height="2" fill="#96acc7"/><rect x="814" y="284" width="2" height="25" fill="#96acc7"/><polygon fill="#96acc7" points="815,310 819,301 811,301"/>
+<rect x="689" y="134" width="2" height="125" fill="#96acc7"/><rect x="384" y="259" width="305" height="2" fill="#96acc7"/><rect x="384" y="259" width="2" height="50" fill="#96acc7"/><polygon fill="#96acc7" points="385,310 389,301 381,301"/>
+<rect x="419" y="349" width="160" height="2" fill="#96acc7"/><polygon fill="#96acc7" points="580,350 571,346 571,354"/><polygon fill="#96acc7" points="420,350 429,354 429,346"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="500" y="322">Private fallback</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="500" y="380">Per service</text>
+<rect x="254" y="394" width="2" height="45" fill="#96acc7"/><rect x="254" y="439" width="245" height="2" fill="#96acc7"/><rect x="499" y="439" width="2" height="30" fill="#96acc7"/><polygon fill="#96acc7" points="500,470 504,461 496,461"/>
+<rect x="744" y="394" width="2" height="45" fill="#96acc7"/><rect x="499" y="439" width="245" height="2" fill="#96acc7"/><polygon fill="#96acc7" points="500,440 509,444 509,436"/>
+<rect x="290" y="470" width="420" height="70" rx="10" fill="#214744" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="500.0" y="499">Tailscale overlay / Headscale</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="500.0" y="522">Private routes and restricted access</text>
+<rect x="394" y="539" width="2" height="35" fill="#96acc7"/><rect x="244" y="574" width="150" height="2" fill="#96acc7"/><rect x="244" y="574" width="2" height="20" fill="#96acc7"/><polygon fill="#96acc7" points="245,595 249,586 241,586"/>
+<rect x="604" y="539" width="2" height="35" fill="#96acc7"/><rect x="604" y="574" width="150" height="2" fill="#96acc7"/><rect x="754" y="574" width="2" height="20" fill="#96acc7"/><polygon fill="#96acc7" points="755,595 759,586 751,586"/>
+<rect x="70" y="595" width="350" height="60" rx="10" fill="#243b59" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="245.0" y="624">VPS application origins</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="245.0" y="647">Private applications</text>
+<rect x="580" y="595" width="350" height="60" rx="10" fill="#243b59" stroke="#547294"/>
+<text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="label" font-size="16" font-weight="600" x="755.0" y="624">Home router → firewall → NPM</text><text text-anchor="middle" fill="#edf3fb" font-family="DejaVu Sans,sans-serif" class="small" font-size="13" x="755.0" y="647">Home applications, including Media</text>
+</svg>
