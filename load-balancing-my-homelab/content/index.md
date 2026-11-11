@@ -5,6 +5,9 @@ slug: load-balancing-my-homelab
 author: "spleenftw"
 status: published
 tags:
+  - "series-lbmy"
+  - "waf"
+  - "owasp"
   - "homelab"
   - "haproxy"
   - "anubis"
@@ -41,8 +44,6 @@ category: "network"
 <a href="../img/infrastructure-overview.png"><img src="../img/infrastructure-overview.png" alt="Detailed anonymized architecture: Cloudflare proxy and DNS-only access, two HAProxy and Anubis edges, private service failover, Tailscale origins, Semaphore deployment, Headscale policy, certificates and Prometheus monitoring" loading="lazy" /></a>
 <figcaption>Open the image at full size to follow the paths. The separate red panel explains failure handling and redundancy limits; it is not an infrastructure component or a traffic path. Cloudflare checks the public entrance; each HAProxy checks its application paths.</figcaption>
 </figure>
-
-<p>The <a href="../files/infrastructure-mermaid.txt">Mermaid source</a> is available if you want to follow the connections at full size. The application groups in it are generic.</p>
 
 <h2>First, make the applications reachable</h2>
 
